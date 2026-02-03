@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Terminal, Copy, Check, Code2 } from "lucide-react";
+import { Terminal, Copy, Check, Code2, Rocket, Zap, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function IntegrationMode() {
@@ -21,76 +20,86 @@ export function IntegrationMode() {
   };
 
   return (
-    <section className="bg-black py-24 px-6 lg:px-24 border-b border-white/10">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-16">
-          <h2 className="text-red-600 font-bold text-xs tracking-widest uppercase mb-4 flex items-center gap-2">
-            <Code2 className="size-4" /> Technical Briefing
+    <section className="bg-black py-24 md:py-32 px-6 lg:px-24 border-b border-white/10 relative overflow-hidden">
+      {/* Background Accent */}
+      <div className="absolute bottom-0 right-0 size-[500px] bg-red-600/5 blur-[120px] pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto relative z-10">
+        <div className="mb-20 text-center lg:text-left">
+          <h2 className="text-red-600 font-bold text-xs tracking-[0.5em] uppercase mb-6 flex items-center justify-center lg:justify-start gap-3">
+            <Code2 className="size-4" /> Technical_Briefing
           </h2>
-          <h3 className="text-6xl font-black tracking-tighter uppercase mb-6">INTEGRATION_MODE</h3>
-          <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
-            Deployment of classified entities requires precise execution. Follow the structural protocols for your specific environment.
+          <h3 className="text-6xl md:text-8xl font-black tracking-tighter uppercase mb-8 leading-[0.85]">INTEGRATION_MODE</h3>
+          <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed mx-auto lg:mx-0">
+            Rapid deployment protocol for multi-engine environments. Our C++ and C# core libraries ensure native performance on all platforms.
           </p>
         </div>
 
         <Tabs defaultValue="unreal" className="w-full">
-          <div className="flex flex-col lg:flex-row gap-12">
-            <div className="lg:w-1/3">
-              <TabsList className="flex flex-col h-auto bg-transparent gap-2 items-start">
+          <div className="flex flex-col lg:flex-row gap-16 items-start">
+            <div className="w-full lg:w-1/3 order-2 lg:order-1">
+              <TabsList className="flex flex-col h-auto bg-transparent gap-3 items-start p-0">
                 <TabsTrigger 
                   value="unreal"
-                  className="w-full text-left justify-start px-6 py-4 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-bold tracking-widest text-xs"
+                  className="w-full text-left justify-between px-8 py-6 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-black tracking-[0.2em] text-xs transition-all hover:border-red-600"
                 >
                   Unreal Engine 5.4+
+                  <Rocket className="size-4 opacity-50" />
                 </TabsTrigger>
                 <TabsTrigger 
                   value="unity"
-                  className="w-full text-left justify-start px-6 py-4 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-bold tracking-widest text-xs"
+                  className="w-full text-left justify-between px-8 py-6 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-black tracking-[0.2em] text-xs transition-all hover:border-red-600"
                 >
-                  Unity 2022.3 LTS
+                  Unity 6 LTS
+                  <Zap className="size-4 opacity-50" />
                 </TabsTrigger>
                 <TabsTrigger 
                   value="godot"
-                  className="w-full text-left justify-start px-6 py-4 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-bold tracking-widest text-xs"
+                  className="w-full text-left justify-between px-8 py-6 border border-white/10 data-[state=active]:bg-white data-[state=active]:text-black rounded-none uppercase font-black tracking-[0.2em] text-xs transition-all hover:border-red-600"
                 >
-                  Godot 4.2+
+                  Godot 4.3+
+                  <Globe className="size-4 opacity-50" />
                 </TabsTrigger>
               </TabsList>
 
-              <div className="mt-8 space-y-6">
-                 <div className="flex gap-4 items-start">
-                    <div className="size-8 rounded-full border border-red-600 text-red-600 flex items-center justify-center font-bold text-xs shrink-0">1</div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">Inject the Forgotten core module into your project dependency list.</p>
+              <div className="mt-12 space-y-8 bg-white/[0.02] p-8 border border-white/5">
+                 <div className="flex gap-6 items-start group">
+                    <div className="size-10 rounded-none border border-red-600 text-red-600 flex items-center justify-center font-black text-sm shrink-0 group-hover:bg-red-600 group-hover:text-white transition-all">01</div>
+                    <p className="text-sm text-muted-foreground leading-relaxed pt-2">Inject the <span className="text-white font-bold">Forgotten.core</span> module into your build pipeline.</p>
                  </div>
-                 <div className="flex gap-4 items-start">
-                    <div className="size-8 rounded-full border border-red-600 text-red-600 flex items-center justify-center font-bold text-xs shrink-0">2</div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">Reference the Boss ID in your spawning logic to fetch assets and behavior trees.</p>
+                 <div className="flex gap-6 items-start group">
+                    <div className="size-10 rounded-none border border-red-600 text-red-600 flex items-center justify-center font-black text-sm shrink-0 group-hover:bg-red-600 group-hover:text-white transition-all">02</div>
+                    <p className="text-sm text-muted-foreground leading-relaxed pt-2">Map the unique <span className="text-white font-bold">Entity_ID</span> to your world-spawner components.</p>
                  </div>
-                 <div className="flex gap-4 items-start">
-                    <div className="size-8 rounded-full border border-red-600 text-red-600 flex items-center justify-center font-bold text-xs shrink-0">3</div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">Call the <code className="text-red-500">Initialize()</code> protocol to activate combat AI.</p>
+                 <div className="flex gap-6 items-start group">
+                    <div className="size-10 rounded-none border border-red-600 text-red-600 flex items-center justify-center font-black text-sm shrink-0 group-hover:bg-red-600 group-hover:text-white transition-all">03</div>
+                    <p className="text-sm text-muted-foreground leading-relaxed pt-2">Trigger <code className="text-red-500 font-bold px-1">Initialize()</code> to link AI behavior trees.</p>
                  </div>
               </div>
             </div>
 
-            <div className="lg:w-2/3">
+            <div className="w-full lg:w-2/3 order-1 lg:order-2">
                {Object.entries(codeExamples).map(([key, code]) => (
                  <TabsContent key={key} value={key} className="m-0 focus-visible:outline-none">
                     <div className="relative group">
-                       <div className="absolute top-4 right-4 z-20">
+                       <div className="absolute top-6 right-6 z-20">
                           <button 
                             onClick={copyCode}
-                            className="bg-white/10 hover:bg-red-600 p-2 text-white transition-colors"
+                            className="bg-red-600 hover:bg-white hover:text-black p-3 text-white transition-all shadow-xl"
                           >
-                             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                             {copied ? <Check className="size-5" /> : <Copy className="size-5" />}
                           </button>
                        </div>
-                       <div className="bg-white/[0.03] border border-white/10 p-8 font-code text-sm leading-relaxed overflow-x-auto whitespace-pre">
+                       <div className="bg-white/[0.03] border border-white/10 p-8 md:p-12 font-code text-sm md:text-base leading-relaxed overflow-x-auto whitespace-pre min-h-[300px] flex items-center">
                           <code className="text-white/80">{code}</code>
                        </div>
-                       <div className="mt-4 flex items-center gap-4 text-[10px] text-muted-foreground font-mono uppercase tracking-[0.2em]">
-                          <span className="flex items-center gap-1"><div className="size-1 bg-red-600 rounded-full" /> Syntax: {key === 'unreal' ? 'C++' : key === 'unity' ? 'C#' : 'GDScript'}</span>
-                          <span>Verified: OK</span>
+                       <div className="mt-6 flex flex-wrap items-center gap-6 text-[10px] text-muted-foreground font-mono uppercase tracking-[0.3em]">
+                          <span className="flex items-center gap-2">
+                            <div className="size-1.5 bg-red-600 animate-pulse" /> 
+                            Syntax: {key === 'unreal' ? 'C++ 20' : key === 'unity' ? 'C# 12' : 'GDScript 2.0'}
+                          </span>
+                          <span className="bg-white/5 px-3 py-1">Verified: v4.0.9_OK</span>
+                          <span className="hidden sm:inline">SHA-256: 8a7c2...f902</span>
                        </div>
                     </div>
                  </TabsContent>
