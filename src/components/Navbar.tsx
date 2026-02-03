@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useAuth, useUser } from "@/firebase";
 import { GithubAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { Terminal, Menu, X, Shield, Zap, Database, GitBranch, User as UserIcon, LogOut, Github } from "lucide-react";
+import { Terminal, Menu, X, Shield, Zap, Database, User as UserIcon, LogOut, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -25,7 +25,7 @@ export function Navbar() {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error("Auth failed:", error);
+      // Errors handled by listener
     }
   };
 
@@ -41,25 +41,25 @@ export function Navbar() {
     <>
       <nav 
         className={cn(
-          "fixed top-0 left-0 right-0 z-[100] transition-all duration-500 border-b",
+          "fixed top-0 left-0 right-0 z-[100] transition-all duration-500 border-b px-4 md:px-6",
           isScrolled 
-            ? "bg-black/95 backdrop-blur-md py-4 border-white/10" 
-            : "bg-transparent py-8 border-transparent"
+            ? "bg-black/95 backdrop-blur-md py-3 md:py-4 border-white/10" 
+            : "bg-transparent py-6 md:py-10 border-transparent"
         )}
       >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <a href="#" className="flex items-center gap-3 group">
-            <div className="size-10 bg-red-600 flex items-center justify-center group-hover:rotate-90 transition-transform duration-500">
-              <Terminal className="size-6 text-white" />
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <a href="#" className="flex items-center gap-2 md:gap-3 group">
+            <div className="size-8 md:size-10 bg-red-600 flex items-center justify-center group-hover:rotate-90 transition-transform duration-500">
+              <Terminal className="size-5 md:size-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-2xl font-black tracking-tighter uppercase leading-[0.7]">FORGOTTEN</span>
-              <span className="text-[8px] font-bold text-red-600 tracking-[0.4em] uppercase">Arsenal v4.0</span>
+              <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-[0.7]">FORGOTTEN</span>
+              <span className="text-[7px] md:text-[8px] font-bold text-red-600 tracking-[0.4em] uppercase">Arsenal v4.0</span>
             </div>
           </a>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-10">
+          <div className="hidden md:flex items-center gap-8 lg:gap-12">
             {navLinks.map((link) => (
               <a
                 key={link.name}
@@ -76,10 +76,10 @@ export function Navbar() {
             {user ? (
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3 pl-4 border-l border-white/10">
-                  <img src={user.photoURL || ""} alt="" className="size-7 border border-white/20 grayscale hover:grayscale-0 transition-all cursor-crosshair" />
+                  <img src={user.photoURL || ""} alt="" className="size-7 border border-white/20 grayscale hover:grayscale-0 transition-all" />
                   <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase tracking-tighter text-white leading-none">{user.displayName}</span>
-                    <span className="text-[7px] font-mono text-red-600 uppercase">Authenticated</span>
+                    <span className="text-[9px] font-black uppercase tracking-tighter text-white leading-none truncate max-w-[100px]">{user.displayName}</span>
+                    <span className="text-[7px] font-mono text-red-600 uppercase">Authorized</span>
                   </div>
                 </div>
                 <button 
@@ -103,49 +103,74 @@ export function Navbar() {
 
           {/* Mobile Toggle */}
           <button 
-            className="md:hidden text-white"
+            className="md:hidden text-white p-2 hover:bg-white/5 transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            {isMobileMenuOpen ? <X size={32} /> : <Menu size={32} />}
+            {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
           </button>
         </div>
       </nav>
 
       {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[99] bg-black flex flex-col items-center justify-center p-6 space-y-12">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="text-4xl font-black uppercase tracking-tighter hover:text-red-600 transition-colors flex items-center gap-4"
-            >
-              <link.icon size={24} className="text-red-600" />
-              {link.name}
-            </a>
-          ))}
-          <div className="h-px w-24 bg-red-600/30" />
-          {user ? (
-            <div className="flex flex-col items-center gap-6">
-              <div className="flex items-center gap-4">
-                <img src={user.photoURL || ""} alt="" className="size-12 border border-white/20 grayscale" />
-                <span className="text-xl font-black uppercase">{user.displayName}</span>
+      <div className={cn(
+        "fixed inset-0 z-[150] bg-black transition-transform duration-500 md:hidden",
+        isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
+      )}>
+        <div className="flex flex-col h-full p-6">
+          <div className="flex justify-between items-center mb-16">
+            <div className="flex items-center gap-3">
+              <div className="size-8 bg-red-600 flex items-center justify-center">
+                <Terminal className="size-5 text-white" />
               </div>
-              <button onClick={handleLogout} className="text-red-600 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
-                <LogOut size={16} /> Disconnect_Session
-              </button>
+              <span className="text-xl font-black tracking-tighter uppercase">FORGOTTEN</span>
             </div>
-          ) : (
-            <button 
-              onClick={handleLogin}
-              className="px-10 py-5 border-2 border-red-600 text-red-600 text-sm font-black uppercase tracking-[0.2em] hover:bg-red-600 hover:text-white transition-all flex items-center gap-3"
-            >
-              <Github size={20} /> Initialize Access
+            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2">
+              <X size={32} />
             </button>
-          )}
+          </div>
+
+          <div className="flex flex-col gap-8 flex-1">
+            {navLinks.map((link) => (
+              <a
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-4xl font-black uppercase tracking-tighter hover:text-red-600 transition-colors flex items-center gap-4"
+              >
+                <link.icon size={24} className="text-red-600" />
+                {link.name}
+              </a>
+            ))}
+          </div>
+
+          <div className="mt-auto pt-12 border-t border-white/10">
+            {user ? (
+              <div className="flex flex-col gap-8">
+                <div className="flex items-center gap-4">
+                  <img src={user.photoURL || ""} alt="" className="size-12 border border-white/20 grayscale" />
+                  <div className="flex flex-col">
+                    <span className="text-xl font-black uppercase">{user.displayName}</span>
+                    <span className="text-xs font-mono text-red-600">SECURE_ID: {user.uid.slice(0, 8)}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} 
+                  className="w-full h-16 border-2 border-red-600 text-red-600 font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+                >
+                  <LogOut size={20} /> Disconnect_Session
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => { handleLogin(); setIsMobileMenuOpen(false); }}
+                className="w-full h-16 bg-red-600 text-white font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-3"
+              >
+                <Github size={20} /> Initialize Access
+              </button>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </>
   );
 }
