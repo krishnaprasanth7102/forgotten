@@ -1,0 +1,23 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "boss-malphas",
+      "description": "A dark, multi-winged demonic entity with red glowing eyes.",
+      "imageUrl": "https://picsum.photos/seed/malphas/1200/800",
+      "imageHint": "dark demon"
+    },
+    {
+      "id": "boss-sentinel",
+      "description": "A massive mechanical construct with rotating blade arms.",
+      "imageUrl": "https://picsum.photos/seed/sentinel/1200/800",
+      "imageHint": "giant robot"
+    },
+    {
+      "id": "boss-void-weaver",
+      "description": "An ethereal creature made of shadow and floating crystals.",
+      "imageUrl": "https://picsum.photos/seed/void/1200/800",
+      "imageHint": "void monster"
+    }
+  ]
+}
