@@ -1,0 +1,75 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A developer registered on the platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "githubUsername": { "type": "string" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Boss": {
+      "title": "Boss",
+      "description": "A lethal entity package available for download.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "codename": { "type": "string" },
+        "description": { "type": "string" },
+        "complexity": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "EXTREME"] },
+        "threatLevel": { "type": "string", "enum": ["C-TIER", "B-TIER", "A-TIER", "S-TIER", "OMEGA"] },
+        "engines": { "type": "array", "items": { "type": "string" } },
+        "imageUrl": { "type": "string" },
+        "githubRepo": { "type": "string" },
+        "packages": {
+          "type": "object",
+          "properties": {
+            "assets": { "type": "string" },
+            "logic": { "type": "string" },
+            "combat": { "type": "string" },
+            "lore": { "type": "string" }
+          }
+        },
+        "contributorId": { "type": "string" },
+        "contributorName": { "type": "string" },
+        "downloadCount": { "type": "number" },
+        "version": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "codename", "description", "contributorId"]
+    },
+    "DownloadLog": {
+      "title": "DownloadLog",
+      "description": "Tracks when a boss package is initialized.",
+      "type": "object",
+      "properties": {
+        "bossId": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["github.com"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Store user profile data."
+    },
+    "/bosses/{bossId}": {
+      "schema": "Boss",
+      "description": "Collection of available boss entities."
+    },
+    "/downloads/{logId}": {
+      "schema": "DownloadLog",
+      "description": "Audit trail for package initializations."
+    }
+  }
+}
