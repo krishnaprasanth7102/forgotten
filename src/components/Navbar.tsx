@@ -51,7 +51,7 @@ export function Navbar() {
             : "bg-transparent py-8 border-transparent"
         )}
       >
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between w-full">
           <a href="#" className="flex items-center gap-4 group shrink-0">
             <div className="size-10 bg-red-600 flex items-center justify-center group-hover:rotate-90 transition-transform duration-700">
               <Terminal className="size-6 text-white" />
@@ -128,7 +128,7 @@ export function Navbar() {
         "fixed inset-0 z-[150] bg-black transition-transform duration-700 ease-in-out md:hidden",
         isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
       )}>
-        <div className="flex flex-col h-full p-8">
+        <div className="flex flex-col h-full p-8 overflow-y-auto">
           <div className="flex justify-between items-center mb-16">
             <div className="flex items-center gap-4">
               <div className="size-10 bg-red-600 flex items-center justify-center">
@@ -141,7 +141,7 @@ export function Navbar() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-8 flex-1">
+          <div className="flex flex-col gap-10 flex-1">
             {navLinks.map((link) => (
               <a
                 key={link.name}
@@ -155,7 +155,7 @@ export function Navbar() {
             ))}
           </div>
 
-          <div className="mt-auto pt-8 border-t border-white/10">
+          <div className="mt-12 pt-8 border-t border-white/10">
             {user ? (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">

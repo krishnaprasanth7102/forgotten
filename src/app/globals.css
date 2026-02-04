@@ -35,6 +35,8 @@
   body {
     @apply bg-background text-foreground overflow-x-hidden;
     font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
