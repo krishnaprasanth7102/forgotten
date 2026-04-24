@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth, useUser } from "@/firebase";
 import { GithubAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { Terminal, Menu, X, Shield, Zap, Database, LogOut, Github } from "lucide-react";
+import { Terminal, Menu, X, Shield, Zap, Database, LogOut, Github, BookOpen, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -36,9 +36,11 @@ export function Navbar() {
   };
 
   const navLinks = [
-    { name: "Entities", href: "#entities", icon: Database },
-    { name: "Integration", href: "#integration", icon: Zap },
-    { name: "Protocol", href: "#protocol", icon: Shield },
+    { name: "Entities", href: "/#entities", icon: Database },
+    { name: "Library", href: "/library", icon: BookOpen },
+    { name: "Playground", href: "/playground", icon: Layers },
+    { name: "Integration", href: "/#integration", icon: Zap },
+    { name: "Protocol", href: "/#protocol", icon: Shield },
   ];
 
   return (
@@ -52,7 +54,7 @@ export function Navbar() {
         )}
       >
         <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between w-full">
-          <a href="#" className="flex items-center gap-4 group shrink-0">
+          <a href="/" className="flex items-center gap-4 group shrink-0">
             <div className="size-10 bg-red-600 flex items-center justify-center group-hover:rotate-90 transition-transform duration-700">
               <Terminal className="size-6 text-white" />
             </div>

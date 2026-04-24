@@ -1,0 +1,762 @@
+"use client";
+
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import {
+  Play, Trash2, BookOpen, X, ChevronRight, ChevronLeft,
+  RotateCcw, Square, Terminal, Cpu, GitBranch, Heart,
+  TrendingUp, TrendingDown, Zap, Plus, Minus, Search, 
+  Settings2, Layers, Compass, Code, ListTree, Sparkles
+} from "lucide-react";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+type PortKind = "exec" | "bool" | "float" | "string";
+interface Port { id: string; label: string; kind: PortKind; }
+interface BPNode { id: string; type: string; label: string; x: number; y: number; inputs: Port[]; outputs: Port[]; description: string; color: string; category: string; }
+interface Connection { id: string; fromNode: string; fromPort: string; toNode: string; toPort: string; }
+interface DraftConn { fromNode: string; fromPort: string; fromDir: "output" | "input"; startX: number; startY: number; mouseX: number; mouseY: number; }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const NODE_W = 210;
+const HEADER_H = 44;
+const PORT_H = 30;
+
+function getPortPos(node: BPNode, portId: string, dir: "input" | "output") {
+  const ports = dir === "input" ? node.inputs : node.outputs;
+  const idx = ports.findIndex(p => p.id === portId);
+  return { 
+    x: dir === "input" ? node.x : node.x + NODE_W, 
+    y: node.y + HEADER_H + idx * PORT_H + PORT_H / 2 + 4 
+  };
+}
+
+const PORT_COLORS: Record<PortKind, string> = { 
+  exec: "#ffffff", 
+  bool: "#881337", // Maroon for Boolean in UE
+  float: "#22c55e", // Light green for Float in UE
+  string: "#d946ef" // Magenta for String in UE 
+};
+
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+const CATALOG: Record<string, Omit<BPNode, "id" | "x" | "y">> = {
+  // Events
+  START:        { category: "Events", type: "START",        label: "START",                 color: "#dc2626", description: "Entry point. Fires once at Begin Play.",                                                                                inputs: [],                                                      outputs: [{ id: "exec",    label: "Exec",           kind: "exec"  }] },
+  EVENT_TICK:   { category: "Events", type: "EVENT_TICK",   label: "EVENT TICK",            color: "#f97316", description: "Fires every frame. Drives continuous polling.",                                                                         inputs: [],                                                      outputs: [{ id: "exec",    label: "Exec",           kind: "exec"  }] },
+  
+  // Logic Flow
+  BRANCH:       { category: "Flow Control", type: "BRANCH",       label: "BRANCH",                color: "#eab308", description: "If/Else gate. Routes True or False based on condition.",                                                               inputs: [{ id: "exec_in", label: "Exec", kind: "exec" }, { id: "condition", label: "Condition", kind: "bool" }], outputs: [{ id: "true",    label: "True",  kind: "exec" }, { id: "false",   label: "False", kind: "exec"  }] },
+  SEQUENCE:     { category: "Flow Control", type: "SEQUENCE",     label: "SEQUENCE",              color: "#a855f7", description: "Fires multiple execution pins sequentially.",                                                                        inputs: [{ id: "exec_in", label: "Exec", kind: "exec" }],       outputs: [{ id: "then_0",  label: "Then 0", kind: "exec" }, { id: "then_1",  label: "Then 1", kind: "exec"  }] },
+  DELAY:        { category: "Flow Control", type: "DELAY",        label: "DELAY",                 color: "#a855f7", description: "Pauses execution logic for a duration.",                                                                             inputs: [{ id: "exec_in", label: "Exec", kind: "exec" }, { id: "duration", label: "Duration", kind: "float" }], outputs: [{ id: "completed", label: "Completed", kind: "exec" }] },
+
+  // Variables
+  SET_VARIABLE: { category: "Variables", type: "SET_VARIABLE", label: "SET VARIABLE",          color: "#8b5cf6", description: "Sets a boss state variable to the given value.",                                                                       inputs: [{ id: "exec_in", label: "Exec", kind: "exec" }, { id: "value",     label: "Value",     kind: "float" }], outputs: [{ id: "exec",    label: "Exec",           kind: "exec"  }] },
+  GET_HEALTH:   { category: "Variables", type: "GET_HEALTH",   label: "GET PLAYER HEALTH",     color: "#22c55e", description: "Returns player health (0–100) as a float.",                                                                            inputs: [],                                                      outputs: [{ id: "health",  label: "Health (float)", kind: "float" }] },
+  
+  // Actions
+  INCREASE_DIFF:{ category: "Boss Actions", type: "INCREASE_DIFF",label: "INCREASE DIFFICULTY",   color: "#3b82f6", description: "Increases boss multiplier. Faster attacks, more damage.",                                                              inputs: [{ id: "exec_in", label: "Exec", kind: "exec"  }],       outputs: [{ id: "exec",    label: "Exec",           kind: "exec"  }] },
+  DECREASE_DIFF:{ category: "Boss Actions", type: "DECREASE_DIFF",label: "DECREASE DIFFICULTY",   color: "#3b82f6", description: "Decreases boss multiplier. Easier tempo for struggling players.",                                                     inputs: [{ id: "exec_in", label: "Exec", kind: "exec"  }],       outputs: [{ id: "exec",    label: "Exec",           kind: "exec"  }] },
+  PRINT_STRING: { category: "Boss Actions", type: "PRINT_STRING", label: "PRINT STRING",          color: "#14b8a6", description: "Logs a string to the debugging HUD.",                                                                                 inputs: [{ id: "exec_in", label: "Exec", kind: "exec" }, { id: "in_string", label: "String", kind: "string" }], outputs: [{ id: "exec", label: "Exec", kind: "exec" }] },
+
+  // Math
+  COMPARE_FLOAT:{ category: "Math", type: "COMPARE_FLOAT",label: "COMPARE FLOAT",         color: "#22c55e", description: "Compares float A against float B.",                                                                                    inputs: [{ id: "a", label: "A", kind: "float" }, { id: "b", label: "B", kind: "float" }], outputs: [{ id: "exec", label: "Exec", kind: "exec" }, { id: "greater", label: ">", kind: "exec"}, { id: "equal", label: "==", kind: "exec"}, { id: "less", label: "<", kind: "exec"}] },
+};
+
+const INITIAL_NODES: BPNode[] = [
+  { id: "n1", ...CATALOG.START,         x: -100,  y: 190 },
+  { id: "n2", ...CATALOG.EVENT_TICK,    x: -100,  y: 330 },
+  { id: "n3", ...CATALOG.GET_HEALTH,    x: -160, y: 480 },
+  { id: "n4", ...CATALOG.COMPARE_FLOAT, x: 180, y: 400 },
+  { id: "n5", ...CATALOG.BRANCH,        x: 480, y: 300 },
+  { id: "n6", ...CATALOG.INCREASE_DIFF, x: 800, y: 210 },
+  { id: "n7", ...CATALOG.DECREASE_DIFF, x: 800, y: 390 },
+];
+
+const INITIAL_CONNS: Connection[] = [
+  { id: "c1", fromNode: "n2", fromPort: "exec",      toNode: "n4", toPort: "a" },
+  { id: "c2", fromNode: "n3", fromPort: "health",    toNode: "n4", toPort: "a" },
+  { id: "c3", fromNode: "n2", fromPort: "exec",      toNode: "n5", toPort: "exec_in" },
+  { id: "c4", fromNode: "n4", fromPort: "less",      toNode: "n5", toPort: "exec_in" }, // Fake routing for demp
+  { id: "c5", fromNode: "n5", fromPort: "true",      toNode: "n6", toPort: "exec_in" },
+  { id: "c6", fromNode: "n5", fromPort: "false",     toNode: "n7", toPort: "exec_in" },
+];
+
+const LEARN_STEPS = [
+  { nodeId: "n1", title: "START Node",           text: "Every boss AI graph starts here — equivalent to Begin Play in Unreal. Fires once." },
+  { nodeId: "n2", title: "Event Tick",            text: "Fires every frame. This drives continuous checking for the boss 'awareness'." },
+  { nodeId: "n4", title: "Compare Float",         text: "Math node! We compare the Player Health against a fixed internal value to see if they are doing well." },
+  { nodeId: "n5", title: "Branch (If / Else)",    text: "The core decision gate. Routes execution logic based on boolean conditions." },
+  { nodeId: "n6", title: "Increase Difficulty",   text: "Triggers when player is struggling. Boss speeds up." },
+];
+
+// Combine groups
+const TOOLBAR_GROUPS = Object.entries(CATALOG).reduce((acc, [key, val]) => {
+  if (!acc[val.category]) acc[val.category] = [];
+  acc[val.category].push(val);
+  return acc;
+}, {} as Record<string, any[]>);
+
+
+// ─── Helper Functions ─────────────────────────────────────────────────────────
+
+function bezier(x1: number, y1: number, x2: number, y2: number) {
+  const dx = Math.abs(x2 - x1);
+  const c = Math.max(dx * 0.55, 60);
+  return `M${x1},${y1} C${x1 + c},${y1} ${x2 - c},${y2} ${x2},${y2}`;
+}
+
+// ─── Port Components ──────────────────────────────────────────────────────────
+
+function PortDot({ kind, side, connected, onDown, onUp }: { kind: PortKind; side: "left" | "right"; connected?: boolean; onDown: (e: React.MouseEvent) => void; onUp: () => void }) {
+  const size = kind === "exec" ? 12 : 10;
+  const isExec = kind === "exec";
+  const color = PORT_COLORS[kind];
+  
+  return (
+    <div
+      data-port="1"
+      onMouseDown={e => { e.stopPropagation(); onDown(e); }}
+      onMouseUp={e => { e.stopPropagation(); onUp(); }}
+      className="group relative flex items-center justify-center transition-all"
+      style={{
+        width: size, height: size, flexShrink: 0,
+        marginLeft: side === "left" ? -size / 2 - 1 : undefined,
+        marginRight: side === "right" ? -size / 2 - 1 : undefined,
+        cursor: "crosshair",
+        zIndex: 10
+      }}
+    >
+      <div 
+        style={{
+          width: "100%", height: "100%",
+          borderRadius: isExec ? "2px" : "50%",
+          backgroundColor: connected ? color : "transparent",
+          border: `2px solid ${color}`,
+          transition: "all 0.2s ease",
+        }}
+        className="group-hover:scale-125 group-hover:shadow-[0_0_10px_currentColor]"
+      />
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export function BlueprintPlayground() {
+  const [nodes, setNodes] = useState<BPNode[]>(INITIAL_NODES);
+  const [connections, setConnections] = useState<Connection[]>(INITIAL_CONNS);
+  const [panOffset, setPanOffset] = useState({ x: 300, y: 100 });
+
+  const [scale, setScale] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draftConn, setDraftConn] = useState<DraftConn | null>(null);
+
+  // AI Prompt State
+  const [promptText, setPromptText] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Simulation State
+  const [simRunning, setSimRunning] = useState(false);
+  const [activeNodes, setActiveNodes] = useState<Set<string>>(new Set());
+  const [activeConns, setActiveConns] = useState<Set<string>>(new Set());
+  const [simVars, setSimVars] = useState<{ health: number; difficulty: number } | null>(null);
+  
+  // HUD
+  const [logs, setLogs] = useState<string[]>([]);
+
+  // Learn Mode
+  const [learnMode, setLearnMode] = useState(false);
+  const [learnStep, setLearnStep] = useState(0);
+
+  // Context Menu
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number, cx: number, cy: number} | null>(null);
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ nodeId: string; smx: number; smy: number; nx: number; ny: number } | null>(null);
+  const panRef = useRef<{ smx: number; smy: number; ox: number; oy: number } | null>(null);
+  const panOffsetRef = useRef(panOffset);
+  const scaleRef = useRef(scale);
+  const nodesRef = useRef(nodes);
+  const draftRef = useRef(draftConn);
+
+  useEffect(() => { panOffsetRef.current = panOffset; }, [panOffset]);
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { draftRef.current = draftConn; }, [draftConn]);
+
+  // Viewport calculation
+  const toCanvas = (clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return { 
+      x: (clientX - rect.left - panOffsetRef.current.x) / scaleRef.current, 
+      y: (clientY - rect.top - panOffsetRef.current.y) / scaleRef.current 
+    };
+  };
+
+  // Keyboard events
+  useEffect(() => {
+    const kd = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !contextMenu) {
+        setNodes(prev => prev.filter(n => n.id !== selectedId));
+        setConnections(prev => prev.filter(c => c.fromNode !== selectedId && c.toNode !== selectedId));
+        setSelectedId(null);
+      }
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", kd);
+    return () => window.removeEventListener("keydown", kd);
+  }, [selectedId, contextMenu]);
+
+  // Global mouse handlers
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      const pos = toCanvas(e.clientX, e.clientY);
+
+      if (draftRef.current) setDraftConn(prev => prev ? { ...prev, mouseX: pos.x, mouseY: pos.y } : null);
+
+      if (dragRef.current) {
+        const { nodeId, smx, smy, nx, ny } = dragRef.current;
+        const dx = (e.clientX - smx) / scaleRef.current;
+        const dy = (e.clientY - smy) / scaleRef.current;
+        setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, x: nx + dx, y: ny + dy } : n));
+      }
+
+      if (panRef.current) {
+        const { smx, smy, ox, oy } = panRef.current;
+        setPanOffset({ x: ox + (e.clientX - smx), y: oy + (e.clientY - smy) });
+      }
+    };
+    const up = () => { dragRef.current = null; panRef.current = null; };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  }, []);
+
+  // Canvas Interactions
+  const handleCanvasMD = (e: React.MouseEvent) => {
+    if (e.button === 0) {
+      if (contextMenu) setContextMenu(null);
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-node]") || target.closest("[data-port]")) return;
+      setSelectedId(null);
+      setDraftConn(null);
+      panRef.current = { smx: e.clientX, smy: e.clientY, ox: panOffsetRef.current.x, oy: panOffsetRef.current.y };
+    }
+  };
+
+  const handleCanvasContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const pos = toCanvas(e.clientX, e.clientY);
+    setContextMenu({ x: e.clientX, y: e.clientY, cx: pos.x, cy: pos.y });
+  };
+
+  // Node & Port Interactions
+  const handleNodeMD = (nodeId: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    if (contextMenu) setContextMenu(null);
+    setSelectedId(nodeId);
+    const n = nodesRef.current.find(x => x.id === nodeId)!;
+    dragRef.current = { nodeId, smx: e.clientX, smy: e.clientY, nx: n.x, ny: n.y };
+  };
+
+  const handlePortMD = (nodeId: string, portId: string, dir: "output" | "input", e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const node = nodesRef.current.find(n => n.id === nodeId)!;
+    const pos = getPortPos(node, portId, dir);
+    setDraftConn({ fromNode: nodeId, fromPort: portId, fromDir: dir, startX: pos.x, startY: pos.y, mouseX: pos.x, mouseY: pos.y });
+  };
+
+  const handlePortMU = (nodeId: string, portId: string, dir: "output" | "input") => {
+    const dc = draftRef.current;
+    if (!dc) return;
+    let fN: string, fP: string, tN: string, tP: string;
+    if (dc.fromDir === "output" && dir === "input")       { fN = dc.fromNode; fP = dc.fromPort; tN = nodeId; tP = portId; }
+    else if (dc.fromDir === "input" && dir === "output")  { fN = nodeId; fP = portId; tN = dc.fromNode; tP = dc.fromPort; }
+    else { setDraftConn(null); return; }
+    
+    if (fN === tN) { setDraftConn(null); return; }
+    
+    // Prevent duplicate connections
+    const exists = connections.some(c => c.fromNode === fN && c.fromPort === fP && c.toNode === tN && c.toPort === tP);
+    if (!exists) setConnections(prev => [...prev, { id: `c_${Date.now()}`, fromNode: fN, fromPort: fP, toNode: tN, toPort: tP }]);
+    setDraftConn(null);
+  };
+
+  const addNode = (type: string, cx?: number, cy?: number) => {
+    const def = CATALOG[type];
+    if (!def) return;
+    const spawnX = cx ?? (-panOffsetRef.current.x + (canvasRef.current?.clientWidth ?? 600) / 2) / scaleRef.current;
+    const spawnY = cy ?? (-panOffsetRef.current.y + (canvasRef.current?.clientHeight ?? 400) / 2) / scaleRef.current;
+    
+    setNodes(prev => [...prev, { id: `n_${Date.now()}`, ...def, x: spawnX, y: spawnY }]);
+    setContextMenu(null);
+  };
+
+  // Zooming
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomSensitivity = 0.001;
+      const delta = -e.deltaY * zoomSensitivity;
+      const newScale = Math.min(Math.max(0.2, scale + delta), 2);
+      
+      // Zoom towards mouse
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const dx = (mx - panOffset.x) * (newScale / scale - 1);
+        const dy = (my - panOffset.y) * (newScale / scale - 1);
+        setPanOffset(p => ({ x: p.x - dx, y: p.y - dy }));
+      }
+      setScale(newScale);
+    }
+  };
+
+  const handleZoom = (factor: number) => {
+    const newScale = Math.min(Math.max(0.2, scale * factor), 2);
+    setScale(newScale);
+  };
+
+  const resetGraph = () => {
+    setNodes(INITIAL_NODES);
+    setConnections(INITIAL_CONNS);
+    setSelectedId(null);
+    setActiveNodes(new Set());
+    setActiveConns(new Set());
+    setSimVars(null);
+    setSimRunning(false);
+    setLogs([]);
+    setScale(1);
+    setPanOffset({ x: window.innerWidth / 3, y: 100 });
+  };
+
+  // ─── AI Generation Function ──────────────────────────────────────────────────
+  const handleAIGenerate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!promptText.trim() || isGenerating) return;
+
+    setSimRunning(false);
+    setIsGenerating(true);
+    
+    try {
+      const response = await fetch('/api/generate-blueprint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText }),
+      });
+
+      if (!response.ok) throw new Error('Generation failed');
+
+      const data = await response.json();
+      
+      if (data.nodes && data.connections) {
+        setNodes(data.nodes);
+        setConnections(data.connections);
+        setLogs([`[AI] Generated logic for: "${promptText}". ${data.summary || ''}`]);
+        setPanOffset({ x: window.innerWidth / 3, y: 150 });
+        setScale(1);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setLogs([`[Error] AI failed to synthesize logic: ${err.message}`]);
+    } finally {
+      setIsGenerating(false);
+      setPromptText("");
+    }
+  };
+
+  // Engine Simulation loop
+  const runSim = useCallback(async () => {
+    if (simRunning) return;
+    setSimRunning(true);
+    setActiveNodes(new Set());
+    setActiveConns(new Set());
+    setLogs([]);
+
+    const health = 35;
+    const vars = { health, difficulty: 1.0 };
+    setSimVars(vars);
+
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+    const ns = nodesRef.current;
+    const cs = connections;
+
+    const visited = new Set<string>();
+    const queue: string[] = [];
+    const startN = ns.find(n => n.type === "START" || n.type === "EVENT_TICK");
+    if (!startN) { setSimRunning(false); return; }
+    queue.push(startN.id);
+
+    while (queue.length > 0) {
+      const nid = queue.shift()!;
+      if (visited.has(nid)) continue; // Prevent infinite loops
+      visited.add(nid);
+      
+      setActiveNodes(prev => new Set([...prev, nid]));
+      await sleep(550); // Engine tick speed
+
+      const node = ns.find(n => n.id === nid);
+      if (!node) continue;
+
+      // Exec Side Effects
+      if (node.type === "INCREASE_DIFF") { vars.difficulty = Math.min(3, +(vars.difficulty + 0.5).toFixed(1)); setSimVars({ ...vars }); }
+      if (node.type === "DECREASE_DIFF") { vars.difficulty = Math.max(0.5, +(vars.difficulty - 0.5).toFixed(1)); setSimVars({ ...vars }); }
+      if (node.type === "PRINT_STRING") { setLogs(l => [...l, `[LogBlueprintUserMessages] Debug: Fired!`]); }
+
+      // Route outgoing execution pins
+      const outs = cs.filter(c => c.fromNode === nid);
+      for (const conn of outs) {
+        let shouldTraverse = false;
+        
+        // Logical Gates
+        if (node.type === "BRANCH") {
+          const cond = vars.health < 50;
+          if (cond && conn.fromPort === "true") shouldTraverse = true;
+          if (!cond && conn.fromPort === "false") shouldTraverse = true;
+        } else if (node.type === "COMPARE_FLOAT") {
+          // Mock compare for demo purposes
+          const cond = vars.health < 50; 
+          if (cond && conn.fromPort === "less") shouldTraverse = true;
+          if (!cond && conn.fromPort === "greater") shouldTraverse = true;
+        } else {
+          // Standard passthrough
+          shouldTraverse = true; // For Sequence and Normal Execs
+        }
+
+        if (shouldTraverse) {
+          setActiveConns(prev => new Set([...prev, conn.id]));
+          await sleep(300);
+          queue.push(conn.toNode);
+        }
+      }
+    }
+
+    await sleep(1500);
+    setActiveNodes(new Set());
+    setActiveConns(new Set());
+    setSimRunning(false);
+  }, [connections, simRunning]);
+
+  const selectedNode = nodes.find(n => n.id === selectedId) ?? null;
+  const learnHighlight = learnMode ? LEARN_STEPS[learnStep]?.nodeId : null;
+
+  return (
+    <section id="playground" className="min-h-screen bg-black border-y border-white/10 relative overflow-hidden flex flex-col">
+      <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
+
+      {/* Editor Header */}
+      <div className="border-b border-white/10 bg-black relative z-20 shrink-0">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-red-600 rounded">
+              <Compass className="size-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black tracking-tight uppercase leading-none">Blueprint Playground</h2>
+              <p className="text-white/40 text-[11px] font-mono mt-1">A high-fidelity Unreal Engine visual logic node simulator.</p>
+            </div>
+          </div>
+          
+          {/* AI Generator Search Bar */}
+          <form onSubmit={handleAIGenerate} className="flex-1 max-w-lg mx-6 hidden lg:block">
+            <div className="relative group">
+              <div className={cn("absolute -inset-0.5 bg-gradient-to-r from-red-600 to-purple-600 rounded-sm opacity-20 group-hover:opacity-40 transition duration-500 blur", isGenerating && "animate-pulse opacity-60")}></div>
+              <div className="relative flex items-center bg-black border border-white/10 rounded-sm overflow-hidden">
+                <div className={cn("pl-3 opacity-70", isGenerating ? "animate-spin text-purple-400" : "animate-pulse text-red-500")}>
+                  <Sparkles size={16} />
+                </div>
+                <input 
+                  type="text" 
+                  value={promptText}
+                  onChange={e => setPromptText(e.target.value)}
+                  placeholder="Prompt AI to generate a boss mechanic..." 
+                  className="w-full bg-transparent border-none py-2 px-3 text-xs font-mono text-white placeholder:text-white/30 focus:outline-none focus:ring-0"
+                  disabled={isGenerating}
+                />
+                <button 
+                  type="submit"
+                  disabled={isGenerating || !promptText.trim()} 
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 disabled:hover:bg-white/5 text-white/80 font-black text-[10px] uppercase tracking-widest border-l border-white/10 disabled:opacity-30 transition-colors shrink-0"
+                >
+                  {isGenerating ? "Thinking..." : "Generate"}
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => { setLearnMode(!learnMode); setLearnStep(0); }} className={cn("flex items-center gap-2 px-4 py-2 font-black text-[10px] uppercase tracking-widest border transition-all rounded-sm", learnMode ? "bg-white text-black border-white" : "border-white/20 text-white/70 hover:border-red-600 hover:text-white")}>
+              <BookOpen size={14} /> Guided Tutorial
+            </button>
+            <button onClick={resetGraph} className="flex items-center gap-2 px-4 py-2 font-black text-[10px] uppercase tracking-widest border border-white/20 text-white/70 hover:border-red-600 hover:text-white transition-all rounded-sm">
+              <RotateCcw size={14} /> Reset
+            </button>
+            <button onClick={runSim} disabled={simRunning} className={cn("flex items-center gap-2 px-6 py-2 font-black text-[10px] uppercase tracking-widest transition-all rounded-sm", simRunning ? "bg-red-600/20 text-red-600 cursor-wait animate-pulse border border-red-600/50" : "bg-red-600 text-white hover:bg-white hover:text-black border border-transparent")}>
+              <Play size={14} /> {simRunning ? "Simulating..." : "Run Sequence"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isGenerating && (
+         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-40 flex items-center justify-center flex-col gap-4 pointer-events-auto transition-opacity duration-300">
+           <Sparkles size={48} className="text-purple-500 animate-bounce" />
+           <div className="text-white font-black uppercase tracking-widest text-xl drop-shadow-lg">Synthesizing Logic...</div>
+         </div>
+      )}
+
+      <div className="flex flex-1 min-h-[700px] relative">
+        
+        {/* Modern Sidebar Palette */}
+        <div className="w-[260px] shrink-0 border-r border-white/10 bg-[#0a0a0a] flex flex-col z-20">
+          <div className="p-4 border-b border-white/5 bg-black">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/30" />
+              <input type="text" placeholder="Search Nodes..." className="w-full bg-white/5 border border-white/10 rounded-sm py-2 pl-9 pr-4 text-xs font-mono focus:outline-none focus:border-red-600 text-white placeholder:text-white/30" />
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto px-2 py-4 space-y-4">
+            {Object.entries(TOOLBAR_GROUPS).map(([category, items]) => (
+              <div key={category}>
+                <div className="flex items-center gap-2 px-2 mb-2">
+                  <ListTree size={12} className="text-white/40" />
+                  <span className="text-[10px] uppercase tracking-widest font-black text-white/60">{category}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {items.map(item => (
+                    <button 
+                      key={item.type} 
+                      onClick={() => addNode(item.type)}
+                      className="flex items-center gap-3 px-3 py-2 text-left rounded hover:bg-white/5 border border-transparent hover:border-white/10 transition-all group"
+                    >
+                      <div className="size-4 rounded-sm" style={{ backgroundColor: item.color }} />
+                      <div className="flex-1">
+                        <div className="text-[11px] font-bold text-white group-hover:text-red-500 transition-colors uppercase tracking-wider">{item.label}</div>
+                      </div>
+                      <Plus size={12} className="text-white/20 group-hover:text-white/80 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas System */}
+        <div
+          ref={canvasRef}
+          onMouseDown={handleCanvasMD}
+          onContextMenu={handleCanvasContextMenu}
+          onWheel={handleWheel}
+          className="flex-1 relative overflow-hidden bg-[#111]"
+          style={{ cursor: panRef.current ? "grabbing" : "grab" }}
+        >
+          {/* Blueprint Grid Background Pattern */}
+          <div 
+            className="absolute inset-0 pointer-events-none opacity-20"
+            style={{ 
+              backgroundImage: "radial-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)", 
+              backgroundSize: `${32 * scale}px ${32 * scale}px`,
+              backgroundPosition: `${panOffset.x}px ${panOffset.y}px`
+            }} 
+          />
+
+          <div style={{ position: "absolute", transformOrigin: "0 0", transform: `translate(${panOffset.x}px,${panOffset.y}px) scale(${scale})`, width: 4000, height: 4000 }}>
+            {/* Edge Rendering */}
+            <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
+              <defs>
+                <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+              {connections.map((c, i) => {
+                const fn = nodes.find(n => n.id === c.fromNode);
+                const tn = nodes.find(n => n.id === c.toNode);
+                if (!fn || !tn) return null;
+                const fp = getPortPos(fn, c.fromPort, "output");
+                const tp = getPortPos(tn, c.toPort, "input");
+                const active = activeConns.has(c.id);
+                const fromPort = fn.outputs.find(p => p.id === c.fromPort);
+                const col = active ? "#dc2626" : fromPort ? PORT_COLORS[fromPort.kind] : "#ffffff";
+                
+                return (
+                  <g key={c.id}>
+                    {/* Shadow / Click Target */}
+                    <path d={bezier(fp.x, fp.y, tp.x, tp.y)} stroke="transparent" strokeWidth={18} fill="none" style={{ cursor: "pointer", pointerEvents: "auto" }} onClick={() => setConnections(prev => prev.filter(x => x.id !== c.id))} />
+                    
+                    {/* Base wire */}
+                    <path d={bezier(fp.x, fp.y, tp.x, tp.y)} stroke={col} strokeWidth={active ? 3.5 : 2.5} fill="none" opacity={active ? 1 : 0.6} filter={active ? "url(#glow)" : undefined} strokeDasharray={active ? "8 4" : undefined} style={active ? { animation: "dash 0.5s linear infinite" } : undefined} />
+                    <style>{`@keyframes dash{to{stroke-dashoffset:-12}}`}</style>
+                    
+                    {/* Disconnect indicator on hover */}
+                    <g className="opacity-0 hover:opacity-100 transition-opacity" style={{pointerEvents: "none"}}>
+                      <circle cx={(fp.x + tp.x) / 2} cy={(fp.y + tp.y) / 2} r={12} fill="#dc2626" />
+                      <text x={(fp.x + tp.x) / 2} y={(fp.y + tp.y) / 2 + 4} fill="white" fontSize={12} textAnchor="middle" fontWeight="bold">×</text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* Live Dragging Connection */}
+              {draftConn && (
+                <path
+                  d={draftConn.fromDir === "output"
+                    ? bezier(draftConn.startX, draftConn.startY, draftConn.mouseX, draftConn.mouseY)
+                    : bezier(draftConn.mouseX, draftConn.mouseY, draftConn.startX, draftConn.startY)}
+                  stroke="#ffffff" strokeWidth={2} fill="none" strokeDasharray="6 4" opacity={0.8} />
+              )}
+            </svg>
+
+            {/* Nodes Rendering */}
+            {nodes.map(node => {
+              const selected = selectedId === node.id;
+              const active = activeNodes.has(node.id);
+              const highlight = learnHighlight === node.id;
+
+              return (
+                <div 
+                  key={node.id} 
+                  data-node="1" 
+                  onMouseDown={e => handleNodeMD(node.id, e)} 
+                  className={cn("absolute rounded-lg shadow-xl border-2 transition-colors", active ? "border-red-500 shadow-red-500/50 blink-anim" : selected ? "border-white" : highlight ? "border-yellow-500 shadow-yellow-500/30" : "border-black/50 hover:border-white/30")}
+                  style={{ left: node.x, top: node.y, width: NODE_W, backgroundColor: "#1e1e1e", userSelect: "none", zIndex: selected ? 20 : 1 }}
+                >
+                  {/* Node Header */}
+                  <div className="rounded-t flex items-center px-3 py-2 gap-2 border-b border-black/50" style={{ backgroundColor: node.color, height: HEADER_H, background: `linear-gradient(90deg, ${node.color}ff 0%, ${node.color}55 100%)` }}>
+                    <Layers fill="rgba(0,0,0,0.3)" stroke="none" size={18} className="shrink-0" />
+                    <span className="font-bold text-[13px] text-white uppercase tracking-wider overflow-hidden text-ellipsis whitespace-nowrap drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">{node.label}</span>
+                  </div>
+
+                  {/* Ports Area */}
+                  <div className="p-2 pb-3 bg-gradient-to-b from-[#222] to-[#1a1a1a] rounded-b flex flex-col gap-1">
+                    {/* Inputs & Outputs side by side alignment emulation by rendering rows if they match, or just listing */}
+                    <div className="flex justify-between w-full">
+                       {/* Left side Inputs */}
+                      <div className="flex flex-col gap-1 w-1/2">
+                        {node.inputs.map(p => {
+                          const connected = connections.some(c => c.toNode === node.id && c.toPort === p.id);
+                          return (
+                            <div key={p.id} className="relative flex items-center h-[28px] gap-2">
+                              <PortDot kind={p.kind} side="left" connected={connected} onDown={e => handlePortMD(node.id, p.id, "input", e)} onUp={() => handlePortMU(node.id, p.id, "input")} />
+                              <span className="text-[11px] font-medium text-gray-300 drop-shadow-md">{p.label}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Right side Outputs */}
+                      <div className="flex flex-col gap-1 w-1/2 items-end">
+                        {node.outputs.map(p => {
+                          const connected = connections.some(c => c.fromNode === node.id && c.fromPort === p.id);
+                          return (
+                            <div key={p.id} className="relative flex items-center h-[28px] gap-2 justify-end">
+                              <span className="text-[11px] font-medium text-gray-300 drop-shadow-md">{p.label}</span>
+                              <PortDot kind={p.kind} side="right" connected={connected} onDown={e => handlePortMD(node.id, p.id, "output", e)} onUp={() => handlePortMU(node.id, p.id, "output")} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Context Menu Overlay */}
+          {contextMenu && (
+            <div 
+              className="absolute z-50 w-56 bg-[#18181b] border border-white/10 shadow-2xl rounded-md overflow-hidden" 
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              <div className="bg-black/50 px-3 py-2 border-b border-white/5 text-[10px] font-black text-white/50 uppercase tracking-widest">
+                Spawn Node
+              </div>
+              <div className="max-h-64 overflow-y-auto p-1">
+                {Object.values(CATALOG).map(node => (
+                  <button 
+                    key={node.type} 
+                    onClick={() => addNode(node.type, contextMenu.cx, contextMenu.cy)}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/10 rounded-sm transition-colors flex items-center gap-2"
+                  >
+                    <div className="size-2 rounded-full" style={{backgroundColor: node.color}} />
+                    {node.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Overlays / Widgets */}
+          
+          {/* Zoom Controls */}
+          <div className="absolute top-6 right-6 flex flex-col gap-1 bg-black/80 backdrop-blur-md border border-white/10 p-1 rounded z-30">
+            <button onClick={() => handleZoom(1.2)} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"><Plus size={16} /></button>
+            <div className="text-[9px] font-mono text-center text-white/40 font-bold py-1 select-none">{Math.round(scale * 100)}%</div>
+            <button onClick={() => handleZoom(0.8)} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"><Minus size={16} /></button>
+          </div>
+
+          {/* Simulation Output Logger */}
+          {simVars && (
+            <div className="absolute bottom-6 right-6 w-72 flex flex-col gap-4 z-30 pointer-events-none">
+              
+              {/* Output Log */}
+              {logs.length > 0 && (
+                <div className="bg-black/90 border-l-2 border-blue-500 p-3 shadow-xl backdrop-blur-sm pointer-events-auto max-h-40 overflow-y-auto">
+                  <div className="text-[9px] text-blue-400 font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><Code size={12}/> Output Log</div>
+                  <div className="space-y-1">
+                    {logs.map((log, i) => <div key={i} className="text-[10px] font-mono text-white/80 break-words">{log}</div>)}
+                  </div>
+                </div>
+              )}
+
+              {/* State Monitor */}
+              <div className="bg-black/90 border border-red-600/30 p-4 shadow-xl backdrop-blur-sm pointer-events-auto">
+                <div className="text-[10px] text-red-600 font-black tracking-widest uppercase mb-4 flex items-center gap-2"><Settings2 size={14}/> Engine State</div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-white/60 mb-1">
+                      <span>Player Health</span> <span className="text-green-400">{simVars.health}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded overflow-hidden"><div className="h-full bg-green-500" style={{ width: `${simVars.health}%` }} /></div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-white/60 mb-1">
+                      <span>Difficulty Multiplier</span> <span className="text-red-400">{simVars.difficulty.toFixed(1)}x</span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded overflow-hidden"><div className="h-full bg-red-600" style={{ width: `${Math.min(100, (simVars.difficulty / 3) * 100)}%` }} /></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Learn Mode Banner */}
+      {learnMode && (
+        <div className="bg-red-600 border-t-4 border-red-800 relative z-30 shadow-[0_-10px_40px_rgba(220,38,38,0.2)]">
+          <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-start gap-4 flex-1">
+              <div className="bg-white p-3 rounded-full shrink-0 shadow-lg">
+                <BookOpen size={20} className="text-red-700" />
+              </div>
+              <div>
+                <div className="text-white/80 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-md">Step {learnStep + 1} of {LEARN_STEPS.length}</div>
+                <h4 className="text-2xl font-black uppercase text-white drop-shadow-lg leading-tight">{LEARN_STEPS[learnStep]?.title}</h4>
+                <p className="text-sm font-medium text-white/90 mt-2 max-w-3xl leading-relaxed">{LEARN_STEPS[learnStep]?.text}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setLearnStep(s => Math.max(0, s - 1))} disabled={learnStep === 0} className="px-5 py-3 bg-black/20 hover:bg-black/40 text-white font-bold text-xs uppercase tracking-wider rounded transition-colors disabled:opacity-30">Prev</button>
+              <button onClick={() => setLearnStep(s => Math.min(LEARN_STEPS.length - 1, s + 1))} disabled={learnStep === LEARN_STEPS.length - 1} className="px-5 py-3 bg-white text-red-700 hover:bg-black hover:text-white font-bold text-xs uppercase tracking-wider rounded shadow-md transition-colors disabled:opacity-30">Next</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

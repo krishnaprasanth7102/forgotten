@@ -1,6 +1,8 @@
 
 import type {Metadata} from 'next';
 import './globals.css';
+import { Providers } from '@/components/Providers';
+
 
 export const metadata: Metadata = {
   title: 'FORGOTTEN // Developer Arsenal',
@@ -21,7 +23,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-black text-white selection:bg-red-600 selection:text-white">
         <div className="scanline" />
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
